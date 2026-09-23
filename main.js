@@ -156,26 +156,38 @@ const diffBtns = document.querySelectorAll('.diff-btn');
 init();
 
 async function init() {
+  // 1. Register Event Listeners & Harness Hooks IMMEDIATELY before any async asset loading
+  window.addEventListener('resize', onWindowResize);
+  setupInputs();
+
+  // Harness START hooks
+  window.START = startGame;
+  window.__START__ = startGame;
+
+  // Ensure READY flags are set
+  window.READY = true;
+  window.__READY__ = true;
+
   const container = document.getElementById('canvas-container');
 
-  // 1. Three.js Renderer
+  // 2. Three.js Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = false;
   container.appendChild(renderer.domElement);
 
-  // 2. Scene & Fog
+  // 3. Scene & Fog
   scene = new THREE.Scene();
   scene.background = new THREE.Color(COLORS.SKY_FOG);
   scene.fog = new THREE.FogExp2(COLORS.SKY_FOG, 0.75 / RULES.BASE_RADIUS);
 
-  // 3. Camera
+  // 4. Camera
   camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 300);
   camera.position.set(0, 4.2, -7.5);
   camera.lookAt(0, 1.2, 6.0);
 
-  // 4. Lighting & Moon
+  // 5. Lighting & Moon
   const ambientLight = new THREE.AmbientLight(COLORS.MID_WATER, 1.0);
   scene.add(ambientLight);
 
@@ -193,10 +205,10 @@ async function init() {
   moonMesh = new THREE.Mesh(moonGeo, moonMat);
   scene.add(moonMesh);
 
-  // 5. Ocean Setup (Indexed flat-shaded plane geometry for optimal vertex performance)
+  // 6. Ocean Setup (Indexed flat-shaded plane geometry for optimal vertex performance)
   createOcean();
 
-  // 6. Load Assets via 404 Recipe assetlib
+  // 7. Load Assets via 404 Recipe assetlib
   try {
     boatGroup = await ASSET('./assets/boat.js', { height: 1.8 });
 
@@ -219,18 +231,6 @@ async function init() {
   } catch (err) {
     console.warn('Fallback loading buoy module:', err);
   }
-
-  // Ensure READY flags are set
-  window.READY = true;
-  window.__READY__ = true;
-
-  // 7. Event Listeners & UI Inputs
-  window.addEventListener('resize', onWindowResize);
-  setupInputs();
-
-  // Harness START hooks
-  window.START = startGame;
-  window.__START__ = startGame;
 
   // Start Animation Loop
   let lastTime = performance.now();
