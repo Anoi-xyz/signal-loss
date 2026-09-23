@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>SIGNAL LOSS</title>
+  <script>window.READY = true; window.__READY__ = true;</script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0b132b; font-family: 'Courier New', Courier, monospace; color: #e0fbfc; }
+    #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+    
+    /* UI Overlay */
+    #ui {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
+      padding: 24px; box-sizing: border-box; z-index: 10;
+    }
+    
+    .hud-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .hud-left { display: flex; align-items: center; gap: 16px; }
+    .title { font-size: 20px; font-weight: bold; letter-spacing: 3px; color: #f4a261; text-shadow: 0 0 10px rgba(244,162,97,0.5); }
+    
+    /* Minimal Circular Compass Widget */
+    .compass-widget {
+      width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+      background: rgba(11, 19, 43, 0.5); border-radius: 50%;
+      box-shadow: 0 0 10px rgba(11, 19, 43, 0.6);
+    }
+    .compass-widget svg { display: block; }
+
+    .hud-right { display: flex; align-items: flex-start; gap: 16px; }
+    .score-box { text-align: right; }
+    .score-num { font-size: 28px; font-weight: bold; color: #e0fbfc; }
+    .score-label { font-size: 11px; letter-spacing: 2px; opacity: 0.7; }
+    
+    /* Pause HUD Button */
+    .pause-btn {
+      pointer-events: auto; padding: 6px 12px; background: rgba(28, 37, 65, 0.5);
+      border: 1px solid rgba(224, 251, 252, 0.3); border-radius: 8px; color: #e0fbfc;
+      font-family: inherit; font-size: 12px; font-weight: bold; letter-spacing: 1px;
+      cursor: pointer; transition: all 0.2s ease; display: none;
+    }
+    .pause-btn:hover { background: rgba(244, 162, 97, 0.2); border-color: #f4a261; color: #f4a261; }
+
+    /* Overlay Screens */
+    #start-screen, #death-screen, #pause-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      pointer-events: auto; cursor: pointer; text-align: center; padding: 20px; z-index: 20;
+    }
+    #start-screen {
+      background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(4px);
+    }
+    #death-screen {
+      background: rgba(11, 19, 43, 0.65); backdrop-filter: blur(2px);
+      display: none;
+    }
+    #pause-screen {
+      background: rgba(11, 19, 43, 0.40); backdrop-filter: blur(2px);
+      display: none;
+    }
+    
+    h1 { font-size: 36px; letter-spacing: 6px; color: #f4a261; margin-bottom: 12px; text-shadow: 0 0 15px rgba(244,162,97,0.4); }
+    .death-title { font-size: 32px; letter-spacing: 6px; color: #e0fbfc; margin-bottom: 16px; text-shadow: 0 0 15px rgba(224,251,252,0.4); }
+    .final-score-num { font-size: 52px; font-weight: bold; color: #f4a261; margin-bottom: 28px; text-shadow: 0 0 20px rgba(244,162,97,0.6); }
+    
+    p.tagline { font-size: 13px; max-width: 360px; line-height: 1.6; opacity: 0.85; margin-bottom: 24px; color: #e0fbfc; }
+    
+    /* Difficulty Row on Start Screen */
+    .difficulty-row {
+      display: flex; gap: 10px; margin-bottom: 28px; z-index: 25;
+    }
+    .diff-btn {
+      padding: 8px 16px; background: transparent; border: 1px solid rgba(224, 251, 252, 0.3);
+      color: #e0fbfc; font-family: inherit; font-size: 11px; font-weight: bold; letter-spacing: 2px;
+      border-radius: 20px; cursor: pointer; transition: all 0.2s ease;
+    }
+    .diff-btn:hover { border-color: #f4a261; color: #f4a261; }
+    .diff-btn.active {
+      background: #f4a261; color: #0b132b; border-color: #f4a261; box-shadow: 0 0 12px rgba(244,162,97,0.5);
+    }
+
+    .start-btn {
+      padding: 14px 36px; background: transparent; border: 2px solid #f4a261; color: #f4a261;
+      font-family: inherit; font-size: 15px; font-weight: bold; letter-spacing: 3px;
+      border-radius: 30px; transition: all 0.2s ease; cursor: pointer;
+    }
+    .start-btn:hover { background: #f4a261; color: #0b132b; box-shadow: 0 0 20px rgba(244,162,97,0.6); }
+    .controls-hint { margin-top: 24px; font-size: 11px; opacity: 0.6; letter-spacing: 1px; }
+
+    /* Touch Controls Overlay for Mobile */
+    .touch-controls {
+      position: absolute; bottom: 20px; left: 0; width: 100%; height: 120px;
+      display: flex; justify-content: space-between; align-items: flex-end; padding: 0 20px; pointer-events: auto; z-index: 5;
+    }
+    .touch-btn {
+      width: 38%; height: 100%; background: rgba(28, 37, 65, 0.25); border: 1px solid rgba(224, 251, 252, 0.15);
+      border-radius: 16px; display: flex; justify-content: center; align-items: center;
+      font-size: 20px; color: rgba(244, 162, 97, 0.6); touch-action: manipulation;
+    }
+    .touch-btn:active { background: rgba(244, 162, 97, 0.2); color: #f4a261; }
+
+    /* Boost Button */
+    .boost-btn {
+      width: 20%; height: 75%; background: rgba(244, 162, 97, 0.15); border: 1.5px solid #f4a261;
+      border-radius: 14px; display: flex; flex-direction: column; justify-content: center; align-items: center;
+      font-size: 11px; font-weight: bold; letter-spacing: 1px; color: #f4a261; cursor: pointer;
+      transition: all 0.2s ease; touch-action: manipulation;
+    }
+    .boost-btn:active:not(.disabled) { background: #f4a261; color: #0b132b; }
+    .boost-btn.disabled { opacity: 0.35; border-color: rgba(224, 251, 252, 0.3); color: #e0fbfc; cursor: not-allowed; }
+    .boost-cost { font-size: 9px; opacity: 0.7; margin-top: 2px; }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- HUD -->
+  <div id="ui">
+    <div class="hud-header">
+      <div class="hud-left">
+        <div class="title">SIGNAL LOSS</div>
+        <div class="compass-widget" id="compass-widget" title="Boat Heading Compass">
+          <svg width="44" height="44" viewBox="0 0 44 44">
+            <!-- Outer Ring in #e0fbfc -->
+            <circle cx="22" cy="22" r="20" fill="rgba(11, 19, 43, 0.4)" stroke="#e0fbfc" stroke-width="1.2" stroke-opacity="0.4"/>
+            <!-- Inner accent ring -->
+            <circle cx="22" cy="22" r="14" fill="none" stroke="#e0fbfc" stroke-width="0.8" stroke-dasharray="2,2" stroke-opacity="0.3"/>
+            <!-- N marker in warm accent #f4a261 -->
+            <text x="22" y="7.5" font-family="'Courier New', monospace" font-size="8" font-weight="bold" fill="#f4a261" text-anchor="middle" dominant-baseline="middle">N</text>
+            <!-- E marker in #e0fbfc -->
+            <text x="37" y="22.5" font-family="'Courier New', monospace" font-size="7.5" font-weight="bold" fill="#e0fbfc" fill-opacity="0.75" text-anchor="middle" dominant-baseline="middle">E</text>
+            <!-- S marker in #e0fbfc -->
+            <text x="22" y="37" font-family="'Courier New', monospace" font-size="7.5" font-weight="bold" fill="#e0fbfc" fill-opacity="0.75" text-anchor="middle" dominant-baseline="middle">S</text>
+            <!-- W marker in #e0fbfc -->
+            <text x="7" y="22.5" font-family="'Courier New', monospace" font-size="7.5" font-weight="bold" fill="#e0fbfc" fill-opacity="0.75" text-anchor="middle" dominant-baseline="middle">W</text>
+            <!-- Pivot dot -->
+            <circle cx="22" cy="22" r="1.5" fill="#e0fbfc"/>
+            <!-- Rotating Needle -->
+            <g id="compass-needle" transform="rotate(0 22 22)">
+              <polygon points="22,8.5 24.5,22 19.5,22" fill="#f4a261"/>
+              <polygon points="22,35.5 24.5,22 19.5,22" fill="#e0fbfc" fill-opacity="0.6"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="hud-right">
+        <div class="score-box">
+          <div class="score-num" id="score-text">0m</div>
+          <div class="score-label">DISTANCE</div>
+        </div>
+        <button class="pause-btn" id="pause-btn">❚❚ PAUSE</button>
+      </div>
+    </div>
+
+    <!-- Touch Steering & Boost Prompts -->
+    <div class="touch-controls">
+      <div class="touch-btn" id="steerL">◄ STEER</div>
+      <div class="boost-btn" id="boost-btn">
+        ⚡ BOOST
+        <span class="boost-cost">-3m VIS</span>
+      </div>
+      <div class="touch-btn" id="steerR">STEER ►</div>
+    </div>
+  </div>
+
+  <!-- Start Screen with Difficulty Presets & #startb -->
+  <div id="start-screen">
+    <h1>SIGNAL LOSS</h1>
+    <p class="tagline">Across an infinite dark ocean, steer toward faint dying buoys. Reach buoys to restore vision. Miss them, and darkness closes in.</p>
+    
+    <!-- Difficulty Selector Presets -->
+    <div class="difficulty-row">
+      <button class="diff-btn" id="diff-easy" data-diff="EASY">EASY</button>
+      <button class="diff-btn active" id="diff-normal" data-diff="NORMAL">NORMAL</button>
+      <button class="diff-btn" id="diff-hard" data-diff="HARD">HARD</button>
+    </div>
+
+    <button class="start-btn" id="startb">INITIALIZE RUN</button>
+    <div class="controls-hint">STEER: A/D or LEFT/RIGHT ARROWS | BOOST: SPACEBAR</div>
+  </div>
+
+  <!-- Pause Screen -->
+  <div id="pause-screen">
+    <h1 class="death-title">PAUSED</h1>
+    <p class="tagline">Run is frozen. Visibility decay paused.</p>
+    <button class="start-btn" id="resume-btn">RESUME</button>
+  </div>
+
+  <!-- Death Screen -->
+  <div id="death-screen">
+    <h1 class="death-title">SIGNAL LOSS</h1>
+    <div class="final-score-num" id="final-score-text">0m</div>
+    <button class="start-btn" id="restart-button">AGAIN</button>
+  </div>
+
+  <script>window.READY = true; window.__READY__ = true;</script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
