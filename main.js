@@ -161,7 +161,7 @@ async function init() {
   // 1. Three.js Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = false;
   container.appendChild(renderer.domElement);
 
@@ -193,7 +193,7 @@ async function init() {
   moonMesh = new THREE.Mesh(moonGeo, moonMat);
   scene.add(moonMesh);
 
-  // 5. Ocean Setup (Non-indexed flat-shaded wave facets)
+  // 5. Ocean Setup (Indexed flat-shaded plane geometry for optimal vertex performance)
   createOcean();
 
   // 6. Load Assets via 404 Recipe assetlib
@@ -245,14 +245,13 @@ async function init() {
   requestAnimationFrame(animate);
 }
 
-// --- OCEAN CREATION (NON-INDEXED FOR CRISP LOW-POLY WAVE FACETS) ---
+// --- OCEAN CREATION (INDEXED PLANEGEOMETRY WITH FLAT SHADING) ---
 function createOcean() {
   const size = 220;
   const segments = 60;
-  const rawGeo = new THREE.PlaneGeometry(size, size, segments, segments);
-  rawGeo.rotateX(-Math.PI / 2);
+  oceanGeo = new THREE.PlaneGeometry(size, size, segments, segments);
+  oceanGeo.rotateX(-Math.PI / 2);
 
-  oceanGeo = rawGeo.toNonIndexed();
   const pos = oceanGeo.attributes.position;
   wavePositionsOriginal = pos.clone();
 
@@ -280,16 +279,25 @@ function getWaveHeight(x, z, time) {
 function updateOcean(time) {
   const pos = oceanGeo.attributes.position;
   const orig = wavePositionsOriginal;
+  const count = pos.count;
+  const amp = activeRules.waveAmplitude !== undefined ? activeRules.waveAmplitude : 0.5;
+  const factor = amp / 0.5;
 
-  for (let i = 0; i < pos.count; i++) {
-    const vx = orig.getX(i) + oceanMesh.position.x;
-    const vz = orig.getZ(i) + oceanMesh.position.z;
-    const vy = getWaveHeight(vx, vz, time);
+  const offsetX = oceanMesh.position.x;
+  const offsetZ = oceanMesh.position.z;
+
+  for (let i = 0; i < count; i++) {
+    const vx = orig.getX(i) + offsetX;
+    const vz = orig.getZ(i) + offsetZ;
+    const vy = factor * (
+      0.32 * Math.sin(vx * 0.22 + time * 1.8) +
+      0.22 * Math.cos(vz * 0.26 + time * 1.4) +
+      0.12 * Math.sin((vx + vz) * 0.18 + time * 2.2)
+    );
     pos.setY(i, vy);
   }
 
   pos.needsUpdate = true;
-  oceanGeo.computeVertexNormals();
 
   oceanMesh.position.x = Math.floor(boatPos.x / 10) * 10;
   oceanMesh.position.z = Math.floor(boatPos.z / 10) * 10;
@@ -717,8 +725,10 @@ function updateBoatAndCamera(time, dt) {
   // Dynamic Camera FOV stretch based on preset FOV + boost
   const baseFOV = activeRules.baseFOV || 55;
   const targetFOV = boostActiveTimer > 0 ? baseFOV + 7 : baseFOV;
-  camera.fov += (targetFOV - camera.fov) * 8.0 * dt;
-  camera.updateProjectionMatrix();
+  if (Math.abs(targetFOV - camera.fov) > 0.01) {
+    camera.fov += (targetFOV - camera.fov) * 8.0 * dt;
+    camera.updateProjectionMatrix();
+  }
 
   // Camera Third-Person Damping & Shake
   const camOffsetDist = activeRules.camOffsetDist || -7.5;
@@ -747,24 +757,34 @@ function updateBoatAndCamera(time, dt) {
 }
 
 // --- HUD UPDATE & COMPASS ---
-function updateHUD() {
-  scoreText.textContent = `${Math.floor(distanceTraveled)}m`;
+let lastScore = -1;
+let lastNeedleDeg = -999;
+let lastBoostDisabled = null;
 
-  // Real-time Needle Rotation driven directly by boatHeading
-  const needleEl = document.getElementById('compass-needle');
-  if (needleEl) {
-    const deg = (boatHeading * 180 / Math.PI);
-    needleEl.setAttribute('transform', `rotate(${deg} 22 22)`);
+function updateHUD() {
+  const currentScore = Math.floor(distanceTraveled);
+  if (currentScore !== lastScore) {
+    scoreText.textContent = `${currentScore}m`;
+    lastScore = currentScore;
   }
 
-  // Boost Button State
+  const needleEl = document.getElementById('compass-needle');
+  if (needleEl) {
+    const deg = Math.round((boatHeading * 180 / Math.PI) * 10) / 10;
+    if (deg !== lastNeedleDeg) {
+      needleEl.setAttribute('transform', `rotate(${deg} 22 22)`);
+      lastNeedleDeg = deg;
+    }
+  }
+
   const boostDisabled = boostActiveTimer > 0 || boostCooldownTimer > 0 || visRadius <= 11.0;
-  if (boostBtn) {
+  if (boostBtn && boostDisabled !== lastBoostDisabled) {
     if (boostDisabled) {
       boostBtn.classList.add('disabled');
     } else {
       boostBtn.classList.remove('disabled');
     }
+    lastBoostDisabled = boostDisabled;
   }
 }
 
